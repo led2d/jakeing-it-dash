@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <link rel="icon" href="favicon.ico" sizes="48x48">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+        <title>Geometry Dash: Try Me!</title>
+
+        <style>
+
+            @font-face {font-family: "Aller"; src: url("assets/fonts/allersubset.woff2")}
+            * {margin: 0; padding: 0}
+            body {
+                display: flex; overflow: hidden;
+                background: linear-gradient(to bottom, rgba(0,101,253,0.75) 0%, rgba(0,46,115,0.75) 100%);
+                background-color: black;
+                background-size: cover;
+            }
+            canvas {display: block; margin: 0 auto}
+
+            /*//////////////////////////////////////////////////////////////////////*/
+
+            .dropoverlay {
+                position: fixed;
+                left: 50%; top: 50%; transform: translate(-50%, -50%);
+                text-align: center; font-family: "Aller"; font-size: 2em;
+                opacity: 0; z-index: 99999; border-radius: 1em;
+                background: rgba(0,0,0,0.75);
+                transition: opacity 0.22s ease-out;
+                pointer-events: none;
+                color: rgba(255, 255, 255, 0.95);
+                width: calc(100% - 1em); max-width: 100vw;
+                height: calc(100% - 1em); max-height: 100vh;
+                display: flex; align-items: center;
+                justify-content: center;
+            }
+            .dropoverlay.dropactive {opacity: 1; pointer-events: auto}
+
+        </style>
+    </head>
+    <body>
+        <div class="dropoverlay" aria-hidden="true">
+            <span>Drop here! (<a style="color:#40E348">.gmd</a>/<a style="color:#FF96FF">.mp3</a>)</span>
+        </div>
+        <script src="dist.js"></script>
+        <script>
+
+            (function () {
+                const overlay = document.querySelector(".dropoverlay");
+                let dragdepth = 0;
+
+                function hasdrag(dt) {
+                    return dt && dt.types && (dt.types.contains ? dt.types.contains("Files") : Array.prototype.indexOf.call(dt.types, "Files") >= 0);
+                }
+                function showoverlay() {
+                    overlay.classList.add("dropactive");
+                    overlay.setAttribute("aria-hidden", "false");
+                }
+                function hideoverlay() {
+                    overlay.classList.remove("dropactive");
+                    overlay.setAttribute("aria-hidden", "true");
+                }
+
+                /*//////////////////////////////////////////////////////////////////////*/
+
+                function lvldataextract(text) {
+                    const t = text.trim();
+                    const m = t.match(/<k>k4<\/k><s>([\s\S]*?)<\/s>/);
+                    if (m) {
+                        return m[1].replace(/\s+/g, "");
+                    }
+                    // surely all valid gzip b64 level data starts with this, right?
+                    if (t.indexOf("H4sI") === 0) {
+                        return t.replace(/\s+/g, "");
+                    }
+                    return null;
+                }
+                function queuePendingMp3(file) {
+                    if (window.__custommusic) {URL.revokeObjectURL(window.__custommusic)}
+                    window.__custommusic = URL.createObjectURL(file);
+                }
+
+                window.addEventListener("dragenter", function (e) {
+                    if (!hasdrag(e.dataTransfer)) {
+                        return;
+                    }
+                    dragdepth++;
+                    showoverlay();
+                });
+                window.addEventListener("dragleave", function (e) {
+                    if (!hasdrag(e.dataTransfer)) {return}
+                    dragdepth = Math.max(0, dragdepth - 1);
+                    if (dragdepth === 0) {hideoverlay()}
+                });
+                window.addEventListener("dragover", function (e) {
+                    if (hasdrag(e.dataTransfer)) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "copy";
+                    }
+                });
+                window.addEventListener("drop", function (e) {
+                    e.preventDefault();
+                    dragdepth = 0; hideoverlay();
+                    const files = e.dataTransfer && e.dataTransfer.files;
+                    if (! files || ! files.length) {
+                        return;
+                    }
+                    for (let i = 0; i < files.length; i++) {
+                        const file = files[i];
+                        const name = (file.name || "").toLowerCase();
+                        if (name.endsWith(".gmd")) {
+                            const reader = new FileReader();
+                            reader.onload = function () {
+                                const b64 = lvldataextract(String(reader.result || ""));
+                                if (b64) {window.__customlevel = b64} else {}
+                            };
+                            reader.readAsText(file);
+                        } else if (name.endsWith(".mp3")) {
+                            queuePendingMp3(file);
+                        }
+                    }
+                });
+            })();
+
+            /*//////////////////////////////////////////////////////////////////////*/
+
+            new ResizeObserver(() => {
+                window.dispatchEvent(new Event("resize"));
+            }).observe(document.documentElement);
+
+        </script>
+    </body>
+</html>

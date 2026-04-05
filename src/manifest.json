@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "description": "do npm run build to compile these!",
+  "segments": [
+    {"file": "WebpackEntry.js", "note": "webpack bridge, __GD_MODULE_MAP"},
+    {"file": "Globals.js", "note": "game width, physics multiplier, collision tags, blend modes and more fun stuff"},
+    {"file": "QualityChange.js", "note": "LD and HD quality logic"},
+    {"file": "game/BootScene.js"},
+    {"file": "FontRegister.js", "note": "angelcode .fnt to phaser font conversion"},
+    {"file": "game/player/PhysicsState.js"},
+    {"file": "TextureHelpers.js", "note": "resolve atlas frames, add atlas/standalone images"},
+    {"file": "game/player/CollisionRect.js"},
+    {"file": "ObjectRegistryNParsers.js", "note": "zlib decompression, level parse, objects from objects.json"},
+    {"file": "game/GameLevel.js"},
+    {"file": "game/player/ShipTrail.js"},
+    {"file": "game/player/Player.js"},
+    {"file": "ColorConstantsNTween.js", "note": "COLOR_ID_*, color tween"},
+    {"file": "ColorManager.js"},
+    {"file": "AudioManager.js"},
+    {"file": "game/Buttons.js", "note": "pause row + end-screen button definitions (frames / layout keys)"},
+    {"file": "game/GameScene.js"},
+    {"file": "ParticleHelpers.js", "note": "tween radial graphic, sparkle burst"},
+    {"file": "game/GameBootstrap.js", "note": "phaser config & start"}
+  ]
+}
