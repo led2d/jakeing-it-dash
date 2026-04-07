@@ -90,11 +90,12 @@ class PlatformerTest {
       return null;
     }
     const dx = playerX - prevX;
-    if (dx > 0 && playerX + halfW > left && prevX + halfW <= left) {
-      return left - halfW;
+    const sideEpsilon = 0.01;
+    if (dx > sideEpsilon && playerX + halfW > left && prevX + halfW <= left) {
+      return left - halfW - sideEpsilon;
     }
-    if (dx < 0 && playerX - halfW < right && prevX - halfW >= right) {
-      return right + halfW;
+    if (dx < -sideEpsilon && playerX - halfW < right && prevX - halfW >= right) {
+      return right + halfW + sideEpsilon;
     }
     return null;
   }

@@ -1064,7 +1064,8 @@ class Player {
               }
               const horizontalOverlap = this._platformer && this._platformer.enabled ? playerX + halfW > left && playerX - halfW < right : playerX + 30 - 5 > left && playerX - 30 + 5 < right;
               if (horizontalOverlap) {
-                if (this._platformer && this._platformer.enabled && !onTop) { // make sure that onTop is excluded as you'll have the issue upon walking onto EVERY BLOCK instead of when moving vertically through blocks in platformer.. not fun
+                const onCeilingSurface = this.p.isFlying && this.p.onCeiling && (headPrev <= top || headLast <= top);
+                if (this._platformer && this._platformer.enabled && !onTop && !onCeilingSurface) { // make sure that onTop is excluded as you'll have the issue upon walking onto EVERY BLOCK instead of when moving vertically through blocks in platformer.. not fun
                   const clampedX = this._platformer.resolveSolidSideCollision(this.p.lastX, playerX, left, right, halfW);
                   if (clampedX !== null) {
                     this._scene._playerWorldX = clampedX;

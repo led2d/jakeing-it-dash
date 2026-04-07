@@ -6,14 +6,6 @@ class GameScene extends Phaser.Scene {
   }
   preload() {
     if (typeof window !== "undefined") {
-      if (window.__gdAppliedMusicObjectUrl) {
-        URL.revokeObjectURL(window.__gdAppliedMusicObjectUrl);
-        window.__gdAppliedMusicObjectUrl = null;
-      }
-      if (window.__custommusic) {
-        URL.revokeObjectURL(window.__custommusic);
-        window.__custommusic = null;
-      }
     }
     if (this.cache.audio.exists("stereo_madness")) {
       this.cache.audio.remove("stereo_madness");
@@ -648,20 +640,27 @@ class GameScene extends Phaser.Scene {
 
   /*/////////////////////// drag div insert ///////////////////////////////////*/
   _consumePendingLevelB64() {
-    const raw = typeof window !== "undefined" && window.__customlevel;
-    if (!raw) {
+    if (typeof window === "undefined") {
       return null;
     }
-    window.__customlevel = null;
-    return raw;
+    const pending = window.__customlevel;
+    if (pending) {
+      window.__customlevel = null;
+      window.__gdAppliedLevelB64 = pending;
+      return pending;
+    }
+    return window.__gdAppliedLevelB64 || null;
   }
   _consumePendingMusicObjectUrl() {
-    const raw = typeof window !== "undefined" && window.__custommusic;
-    if (!raw) {
+    if (typeof window === "undefined") {
       return null;
     }
-    window.__custommusic = null;
-    return raw;
+    const pending = window.__custommusic;
+    if (pending) {
+      window.__custommusic = null;
+      return pending;
+    }
+    return window.__gdAppliedMusicObjectUrl || null;
   }
   _applyPendingLevelReload() {
     const b64 = this._consumePendingLevelB64();
