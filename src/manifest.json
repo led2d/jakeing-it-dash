@@ -9,7 +9,10 @@
     {"file": "WebpackEntry.js", "note": "webpack bridge, __GD_MODULE_MAP"},
     {"file": "config/Global.js", "note": "game width, physics multiplier, collision tags, blend modes and more fun stuff"},
     {"file": "config/Buttons.js", "note": "pause row + end-screen button definitions (frames / layout keys)"},
-
+    
+    {"file": "game/fun/Rainbow.js"},
+    {"file": "game/fun/PlatformerTest.js"},
+    
     {"file": "game/BootScene.js"},
     {"file": "game/LoadingScene.js"},
     {"file": "game/GameLevel.js"},

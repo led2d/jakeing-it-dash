@@ -38,8 +38,11 @@ class GameScene extends Phaser.Scene {
       _v: -viewportHalfMinus150
     };
     this._state = new PlayerPhysicsState();
+    this._rawinbow = new TasteTheRainbow();
+    this._platformer = new PlatformerTest(this._state);
+    this._platformer.reset();
     this._level = new GameLevel(this, this._cameraXRef);
-    this._player = new Player(this, this._state, this._level);
+    this._player = new Player(this, this._state, this._level, this._platformer);
     this._colorManager = new ColorManager();
     this._audio = new AudioManager(this);
     let levelText = this.cache.text.get("level_1");
@@ -163,6 +166,10 @@ class GameScene extends Phaser.Scene {
     this._spaceWasDown = false;
     this._spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this._upKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
+    this._leftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
+    this._rightKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
+    this._aKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+    this._dKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     this._pauseBtn = this.add.image(gameWidth - 30, 30, "GJ_WebSheet", "GJ_pauseBtn_clean_001.png").setScrollFactor(0).setDepth(30).setAlpha(75 / 255).setVisible(false);
     this._pauseBtn.setInteractive();
     this._expandHitArea(this._pauseBtn, 2);
@@ -910,6 +917,7 @@ class GameScene extends Phaser.Scene {
     this._cameraXRef._v = -viewportHalfMinus150;
     this._prevCameraX = -viewportHalfMinus150;
     this._playerWorldX = 0;
+    this._state.lastX = this._playerWorldX;
     this._deltaBuffer = 0;
     this._deathTimer = 0;
     this._deathSoundPlayed = false;
@@ -919,6 +927,8 @@ class GameScene extends Phaser.Scene {
     this._endCameraOverride = false;
     this._endCamTween = null;
     this._spaceWasDown = false;
+    this._state.leftKeyDown = false;
+    this._state.rightKeyDown = false;
   }
   _restartLevel() {
     this._attempts++;
@@ -926,6 +936,7 @@ class GameScene extends Phaser.Scene {
     const cameraXBefore = this._cameraX;
     this._resetGameplayState();
     this._state.reset();
+    this._platformer.reset();
     this._player.reset();
     if (this._glitterEmitter && this._glitterEmitter.scene) {
       this._glitterEmitter.stop();
@@ -1047,6 +1058,11 @@ class GameScene extends Phaser.Scene {
       this._fpsFrames = 0;
     }
     if (this._paused) {
+      const pauseResumeHeld = this._spaceKey.isDown || this._upKey.isDown;
+      if (pauseResumeHeld && !this._spaceWasDown) {
+        this._resumeGame();
+      }
+      this._spaceWasDown = pauseResumeHeld;
       this._deltaBuffer = 0;
       return;
     }
@@ -1114,6 +1130,10 @@ class GameScene extends Phaser.Scene {
       return;
     }
     let jumpHeld = this._spaceKey.isDown || this._upKey.isDown;
+    const moveLeft = this._leftKey.isDown || this._aKey.isDown;
+    const moveRight = this._rightKey.isDown || this._dKey.isDown;
+    this._state.leftKeyDown = moveLeft;
+    this._state.rightKeyDown = moveRight;
     if (jumpHeld && !this._spaceWasDown) {
       this._pushButton();
     } else if (!jumpHeld && this._spaceWasDown) {
@@ -1191,10 +1211,12 @@ class GameScene extends Phaser.Scene {
     const savedY = this._state.y;
     for (let s = 0; s < physicsSubsteps; s++) {
       this._state.lastY = this._state.y;
+      this._state.lastX = this._playerWorldX;
       this._player.updateJump(jumpDt);
       this._state.y += this._state.yVelocity * jumpDt;
+      this._playerWorldX += this._platformer.getPreCollisionHorizontalDelta(subStepSize);
       this._player.checkCollisions(this._playerWorldX - viewportHalfMinus150);
-      this._playerWorldX += subStepSize * scrollVelocityMul * inputSmoothingMul;
+      this._playerWorldX += this._platformer.getPostCollisionHorizontalDelta(subStepSize);
       if (!this._state.isFlying) {
         if (this._state.onGround) {
           this._player.updateGroundRotation(jumpDt);
@@ -1264,6 +1286,7 @@ class GameScene extends Phaser.Scene {
     this._level.applyEnterEffects(this._cameraX);
     this._glitterCenterX = this._cameraX + gameWidth / 2;
     this._glitterCenterY = groundBaselineY - this._cameraY;
+    this._rawinbow.apply(this, delta / 1000);
     this._updateBackground();
     this._level.stepGroundAnimation(delta / 1000);
     this._level.updateGroundTiles(this._cameraY);

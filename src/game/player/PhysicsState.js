@@ -4,6 +4,7 @@ class PlayerPhysicsState {
   }
   reset() {
     this.y = 30;
+    this.lastX = 0;
     this.lastY = 30;
     this.lastGroundPosY = 30;
     this.yVelocity = 0;
@@ -18,6 +19,9 @@ class PlayerPhysicsState {
     this.onCeiling = false;
     this.upKeyDown = false;
     this.upKeyPressed = false;
+    this.leftKeyDown = false;
+    this.rightKeyDown = false;
+    this.platformerMode = false;
     this.isDead = false;
   }
 }

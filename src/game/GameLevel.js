@@ -157,13 +157,23 @@ class GameLevel {
     this._groundShadowR.x = gameWidth + 1;
     this._ceilingShadowR.x = gameWidth + 1;
   }
-  // scroll/recycle ground tiles with the camera, when in ship gamemode animates floor/ceiling towards the so called ship "corridor" (idk how that would be called)
+  // scroll / recycle ground tiles with the camera, when in ship gamemode animates floor/ceiling towards the so called ship "corridor" (idk how that would be called)
   updateGroundTiles(groundYOffset = 0) {
     const camX = this._cameraXRef.value;
     const tileW = this._tileW;
     let groundScreenY;
     let ceilingScreenY;
-    let rightmostWorldX = this._maxGroundWorldX || -Infinity;
+    let rightmostWorldX = -Infinity;
+    let leftmostWorldX = Infinity;
+    for (let i = 0; i < this._groundTiles.length; i++) {
+      const wx = this._groundTiles[i]._worldX;
+      if (wx > rightmostWorldX) {
+        rightmostWorldX = wx;
+      }
+      if (wx < leftmostWorldX) {
+        leftmostWorldX = wx;
+      }
+    }
     if (this._flyGroundActive && this._groundTargetValue > 0.001) {
       let groundBlendT = this._groundTargetValue;
       const flyFloorVisualY = 620;
@@ -185,7 +195,10 @@ class GameLevel {
         groundTile._worldX = rightmostWorldX + tileW;
         ceilingTile._worldX = groundTile._worldX;
         rightmostWorldX = groundTile._worldX;
-        this._maxGroundWorldX = rightmostWorldX;
+      } else if (groundTile._worldX >= camX + gameWidth + tileW) {
+        groundTile._worldX = leftmostWorldX - tileW;
+        ceilingTile._worldX = groundTile._worldX;
+        leftmostWorldX = groundTile._worldX;
       }
       let screenX = groundTile._worldX - camX;
       groundTile.x = screenX;
@@ -194,6 +207,7 @@ class GameLevel {
       ceilingTile.y = ceilingScreenY;
       ceilingTile.setVisible(this._flyGroundActive && this._groundTargetValue > 0);
     }
+    this._maxGroundWorldX = rightmostWorldX;
     this._groundLine.y = groundScreenY;
     if (this._flyGroundActive && this._groundTargetValue > 0) {
       this._ceilingLine.y = ceilingScreenY;

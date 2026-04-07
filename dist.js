@@ -99136,6 +99136,216 @@ const EndScreenButtons = [{
   dx: 200,
   kind: EndKind.MENU
 }];
+class TasteTheRainbow {
+  static RainbowEnabled = false;
+  constructor() {
+    this.enabled = TasteTheRainbow.RainbowEnabled;
+    this._t = 0;
+    this._periodSeconds = 5;
+  }
+  _hsvToRgb(h, s, v) {
+    const i = Math.floor(h * 6);
+    const f = h * 6 - i;
+    const p = v * (1 - s);
+    const q = v * (1 - f * s);
+    const t = v * (1 - (1 - f) * s);
+    let r = v;
+    let g = t;
+    let b = p;
+    switch (i % 6) {
+      case 0:
+        r = v; g = t; b = p;
+        break;
+      case 1:
+        r = q; g = v; b = p;
+        break;
+      case 2:
+        r = p; g = v; b = t;
+        break;
+      case 3:
+        r = p; g = q; b = v;
+        break;
+      case 4:
+        r = t; g = p; b = v;
+        break;
+      case 5:
+        r = v; g = p; b = q;
+        break;
+    }
+    return Phaser.Display.Color.GetColor(Math.round(r * 255), Math.round(g * 255), Math.round(b * 255));
+  }
+  apply(scene, deltaSec) {
+    if (!this.enabled) {
+      return;
+    }
+    this._t += deltaSec;
+    const hue = (this._t % this._periodSeconds) / this._periodSeconds;
+    const tint = this._hsvToRgb(hue, 1, 1);
+    const applyTint = obj => {
+      if (!obj) {
+        return;
+      }
+      const isAttemptLabel = obj === scene._attemptsLabel;
+      const isTextLike = obj.type === "Text" || obj.type === "BitmapText";
+      if (!isAttemptLabel && !isTextLike && obj.setTint) {
+        obj.setTint(tint);
+      }
+      if (obj.list) {
+        for (let i = 0; i < obj.list.length; i++) {
+          applyTint(obj.list[i]);
+        }
+      }
+    };
+    applyTint(scene._level && scene._level.container);
+    applyTint(scene._level && scene._level.additiveContainer);
+    applyTint(scene._level && scene._level.topContainer);
+  }
+}
+class PlatformerTest {
+  static PlatformerEnabled = true;
+  constructor(physicsState) {
+    this.p = physicsState;
+    this.enabled = PlatformerTest.PlatformerEnabled;
+    this._horizontalVelocity = 0;
+    this._releaseSmoothSeconds = 0.05;
+  }
+  reset() {
+    this._horizontalVelocity = 0;
+    this._facingCurrent = 1;
+    this._facingFrom = 1;
+    this._facingTo = 1;
+    this._facingElapsed = 0;
+    this._facingDuration = 0.1;
+    this.p.platformerMode = this.enabled;
+    this.p.leftKeyDown = false;
+    this.p.rightKeyDown = false;
+  }
+  getDirection() {
+    if (!this.enabled) {
+      return 1;
+    }
+    const left = !!this.p.leftKeyDown;
+    const right = !!this.p.rightKeyDown;
+    if (left === right) {
+      return 0;
+    }
+    return right ? 1 : -1;
+  }
+  getHorizontalDelta(stepUnits) {
+    if (!this.enabled) {
+      return stepUnits * scrollVelocityMul * inputSmoothingMul;
+    }
+    const dir = this.getDirection();
+    const targetVelocity = dir * scrollVelocityMul * inputSmoothingMul;
+    const stepSeconds = stepUnits / 60;
+    const blend = Math.min(1, stepSeconds / this._releaseSmoothSeconds);
+    this._horizontalVelocity += (targetVelocity - this._horizontalVelocity) * blend;
+    return this._horizontalVelocity * stepUnits;
+  }
+  getPreCollisionHorizontalDelta(stepUnits) {
+    if (!this.enabled) {
+      return 0;
+    }
+    return this.getHorizontalDelta(stepUnits);
+  }
+  getPostCollisionHorizontalDelta(stepUnits) {
+    if (this.enabled) {
+      return 0;
+    }
+    return this.getHorizontalDelta(stepUnits);
+  }
+  shouldRotateOnJump() {
+    if (!this.enabled) {
+      return true;
+    }
+    return this.getDirection() !== 0;
+  }
+  getRotateDirection() {
+    if (!this.enabled) {
+      return 1;
+    }
+    return this.getDirection();
+  }
+  shouldTriggerJumpSquish() {
+    return this.enabled && this.getDirection() === 0;
+  }
+  getSquishScaleForRotation(rotationRad, baseX, baseY) {
+    if (!this.enabled) {
+      return {
+        x: baseX,
+        y: baseY
+      };
+    }
+    const sideways = Math.abs(Math.sin(rotationRad)) > Math.abs(Math.cos(rotationRad));
+    if (sideways) {
+      return {
+        x: baseY,
+        y: baseX
+      };
+    }
+    return {
+      x: baseX,
+      y: baseY
+    };
+  }
+  resolveSolidSideCollision(prevX, playerX, left, right, halfW) {
+    if (!this.enabled) {
+      return null;
+    }
+    const dx = playerX - prevX;
+    if (dx > 0 && playerX + halfW > left && prevX + halfW <= left) {
+      return left - halfW;
+    }
+    if (dx < 0 && playerX - halfW < right && prevX - halfW >= right) {
+      return right + halfW;
+    }
+    return null;
+  }
+  shouldBonkUnderSolid() {
+    return this.enabled;
+  }
+  getFacingScaleX(deltaSec, currentScaleX) {
+    if (!this.enabled) {
+      return 1;
+    }
+    if (this._facingCurrent === undefined) {
+      this._facingCurrent = currentScaleX || 1;
+      this._facingFrom = this._facingCurrent;
+      this._facingTo = this._facingCurrent;
+      this._facingElapsed = this._facingDuration;
+    }
+    const dir = this.getDirection();
+    const desiredTarget = dir === 0 ? this._facingTo : dir > 0 ? 1 : -1;
+    if (desiredTarget !== this._facingTo) {
+      this._facingFrom = this._facingCurrent;
+      this._facingTo = desiredTarget;
+      this._facingElapsed = 0;
+    }
+    if (this._facingFrom === this._facingTo) {
+      this._facingCurrent = this._facingTo;
+      return this._facingCurrent;
+    }
+    this._facingElapsed = Math.min(this._facingDuration, this._facingElapsed + deltaSec);
+    const t = this._facingDuration > 0 ? this._facingElapsed / this._facingDuration : 1;
+    this._facingCurrent = this._facingFrom + (this._facingTo - this._facingFrom) * t;
+    return this._facingCurrent;
+  }
+  shouldUseGroundParticles(onGround) {
+    if (!this.enabled) {
+      return onGround;
+    }
+    return onGround && Math.abs(this._horizontalVelocity) > 0.08;
+  }
+  shouldUseShipGroundDrag(onGround, onCeiling) {
+    if (!onGround || onCeiling) {
+      return false;
+    }
+    if (!this.enabled) {
+      return true;
+    }
+    return Math.abs(this._horizontalVelocity) > 0.08;
+  }
+}
 // not much is here since we're immediately moving into LoadingScene.js
 class BootScene extends Phaser.Scene {
   constructor() {
@@ -99545,13 +99755,23 @@ class GameLevel {
     this._groundShadowR.x = gameWidth + 1;
     this._ceilingShadowR.x = gameWidth + 1;
   }
-  // scroll/recycle ground tiles with the camera, when in ship gamemode animates floor/ceiling towards the so called ship "corridor" (idk how that would be called)
+  // scroll / recycle ground tiles with the camera, when in ship gamemode animates floor/ceiling towards the so called ship "corridor" (idk how that would be called)
   updateGroundTiles(groundYOffset = 0) {
     const camX = this._cameraXRef.value;
     const tileW = this._tileW;
     let groundScreenY;
     let ceilingScreenY;
-    let rightmostWorldX = this._maxGroundWorldX || -Infinity;
+    let rightmostWorldX = -Infinity;
+    let leftmostWorldX = Infinity;
+    for (let i = 0; i < this._groundTiles.length; i++) {
+      const wx = this._groundTiles[i]._worldX;
+      if (wx > rightmostWorldX) {
+        rightmostWorldX = wx;
+      }
+      if (wx < leftmostWorldX) {
+        leftmostWorldX = wx;
+      }
+    }
     if (this._flyGroundActive && this._groundTargetValue > 0.001) {
       let groundBlendT = this._groundTargetValue;
       const flyFloorVisualY = 620;
@@ -99573,7 +99793,10 @@ class GameLevel {
         groundTile._worldX = rightmostWorldX + tileW;
         ceilingTile._worldX = groundTile._worldX;
         rightmostWorldX = groundTile._worldX;
-        this._maxGroundWorldX = rightmostWorldX;
+      } else if (groundTile._worldX >= camX + gameWidth + tileW) {
+        groundTile._worldX = leftmostWorldX - tileW;
+        ceilingTile._worldX = groundTile._worldX;
+        leftmostWorldX = groundTile._worldX;
       }
       let screenX = groundTile._worldX - camX;
       groundTile.x = screenX;
@@ -99582,6 +99805,7 @@ class GameLevel {
       ceilingTile.y = ceilingScreenY;
       ceilingTile.setVisible(this._flyGroundActive && this._groundTargetValue > 0);
     }
+    this._maxGroundWorldX = rightmostWorldX;
     this._groundLine.y = groundScreenY;
     if (this._flyGroundActive && this._groundTargetValue > 0) {
       this._ceilingLine.y = ceilingScreenY;
@@ -100396,8 +100620,11 @@ class GameScene extends Phaser.Scene {
       _v: -viewportHalfMinus150
     };
     this._state = new PlayerPhysicsState();
+    this._rawinbow = new TasteTheRainbow();
+    this._platformer = new PlatformerTest(this._state);
+    this._platformer.reset();
     this._level = new GameLevel(this, this._cameraXRef);
-    this._player = new Player(this, this._state, this._level);
+    this._player = new Player(this, this._state, this._level, this._platformer);
     this._colorManager = new ColorManager();
     this._audio = new AudioManager(this);
     let levelText = this.cache.text.get("level_1");
@@ -100521,6 +100748,10 @@ class GameScene extends Phaser.Scene {
     this._spaceWasDown = false;
     this._spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     this._upKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
+    this._leftKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT);
+    this._rightKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT);
+    this._aKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+    this._dKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     this._pauseBtn = this.add.image(gameWidth - 30, 30, "GJ_WebSheet", "GJ_pauseBtn_clean_001.png").setScrollFactor(0).setDepth(30).setAlpha(75 / 255).setVisible(false);
     this._pauseBtn.setInteractive();
     this._expandHitArea(this._pauseBtn, 2);
@@ -101268,6 +101499,7 @@ class GameScene extends Phaser.Scene {
     this._cameraXRef._v = -viewportHalfMinus150;
     this._prevCameraX = -viewportHalfMinus150;
     this._playerWorldX = 0;
+    this._state.lastX = this._playerWorldX;
     this._deltaBuffer = 0;
     this._deathTimer = 0;
     this._deathSoundPlayed = false;
@@ -101277,6 +101509,8 @@ class GameScene extends Phaser.Scene {
     this._endCameraOverride = false;
     this._endCamTween = null;
     this._spaceWasDown = false;
+    this._state.leftKeyDown = false;
+    this._state.rightKeyDown = false;
   }
   _restartLevel() {
     this._attempts++;
@@ -101284,6 +101518,7 @@ class GameScene extends Phaser.Scene {
     const cameraXBefore = this._cameraX;
     this._resetGameplayState();
     this._state.reset();
+    this._platformer.reset();
     this._player.reset();
     if (this._glitterEmitter && this._glitterEmitter.scene) {
       this._glitterEmitter.stop();
@@ -101405,6 +101640,11 @@ class GameScene extends Phaser.Scene {
       this._fpsFrames = 0;
     }
     if (this._paused) {
+      const pauseResumeHeld = this._spaceKey.isDown || this._upKey.isDown;
+      if (pauseResumeHeld && !this._spaceWasDown) {
+        this._resumeGame();
+      }
+      this._spaceWasDown = pauseResumeHeld;
       this._deltaBuffer = 0;
       return;
     }
@@ -101472,6 +101712,10 @@ class GameScene extends Phaser.Scene {
       return;
     }
     let jumpHeld = this._spaceKey.isDown || this._upKey.isDown;
+    const moveLeft = this._leftKey.isDown || this._aKey.isDown;
+    const moveRight = this._rightKey.isDown || this._dKey.isDown;
+    this._state.leftKeyDown = moveLeft;
+    this._state.rightKeyDown = moveRight;
     if (jumpHeld && !this._spaceWasDown) {
       this._pushButton();
     } else if (!jumpHeld && this._spaceWasDown) {
@@ -101549,10 +101793,12 @@ class GameScene extends Phaser.Scene {
     const savedY = this._state.y;
     for (let s = 0; s < physicsSubsteps; s++) {
       this._state.lastY = this._state.y;
+      this._state.lastX = this._playerWorldX;
       this._player.updateJump(jumpDt);
       this._state.y += this._state.yVelocity * jumpDt;
+      this._playerWorldX += this._platformer.getPreCollisionHorizontalDelta(subStepSize);
       this._player.checkCollisions(this._playerWorldX - viewportHalfMinus150);
-      this._playerWorldX += subStepSize * scrollVelocityMul * inputSmoothingMul;
+      this._playerWorldX += this._platformer.getPostCollisionHorizontalDelta(subStepSize);
       if (!this._state.isFlying) {
         if (this._state.onGround) {
           this._player.updateGroundRotation(jumpDt);
@@ -101622,6 +101868,7 @@ class GameScene extends Phaser.Scene {
     this._level.applyEnterEffects(this._cameraX);
     this._glitterCenterX = this._cameraX + gameWidth / 2;
     this._glitterCenterY = groundBaselineY - this._cameraY;
+    this._rawinbow.apply(this, delta / 1000);
     this._updateBackground();
     this._level.stepGroundAnimation(delta / 1000);
     this._level.updateGroundTiles(this._cameraY);
@@ -102022,6 +102269,7 @@ class PlayerPhysicsState {
   }
   reset() {
     this.y = 30;
+    this.lastX = 0;
     this.lastY = 30;
     this.lastGroundPosY = 30;
     this.yVelocity = 0;
@@ -102036,14 +102284,18 @@ class PlayerPhysicsState {
     this.onCeiling = false;
     this.upKeyDown = false;
     this.upKeyPressed = false;
+    this.leftKeyDown = false;
+    this.rightKeyDown = false;
+    this.platformerMode = false;
     this.isDead = false;
   }
 }
 class Player {
-  constructor(scene, physicsState, gameLayer) {
+  constructor(scene, physicsState, gameLayer, platformer = null) {
     this._scene = scene;
     this.p = physicsState;
     this._gameLayer = gameLayer;
+    this._platformer = platformer;
     this._rotation = 0;
     this.rotateActionActive = false;
     this.rotateActionTime = 0;
@@ -102055,6 +102307,9 @@ class Player {
     this._lastXOffset = 0;
     this._lastCameraX = 0;
     this._lastCameraY = 0;
+    this._jumpSquishTime = 0;
+    this._jumpSquishDuration = 0.5;
+    this._platformerFacingScaleX = 1;
     this._createSprites();
     this._initParticles(scene);
     scene.events.on("shutdown", () => this._cleanupExplosion());
@@ -102344,7 +102599,7 @@ class Player {
     const bodyWorldY = gameYToWorldY(this.p.y);
     this._particleEmitter.particleX = playerWorldX - 20;
     this._particleEmitter.particleY = bodyWorldY + 26;
-    const runParticlesOn = this.p.onGround && !this.p.isFlying;
+    const runParticlesOn = this._platformer ? this._platformer.shouldUseGroundParticles(this.p.onGround) && !this.p.isFlying : this.p.onGround && !this.p.isFlying;
     if (runParticlesOn && !this._particleActive) {
       this._particleEmitter.start();
       this._particleActive = true;
@@ -102385,7 +102640,7 @@ class Player {
     }
     this._shipDragEmitter.x = viewportHalfMinus150;
     this._shipDragEmitter.particleY = gameYToWorldY(this.p.y) + cameraYOffset + 30;
-    const shipGroundDrag = this.p.isFlying && this.p.onGround && !this.p.onCeiling;
+    const shipGroundDrag = this.p.isFlying && (this._platformer ? this._platformer.shouldUseShipGroundDrag(this.p.onGround, this.p.onCeiling) : this.p.onGround && !this.p.onCeiling);
     if (shipGroundDrag && !this._shipDragActive) {
       this._shipDragEmitter.start();
       this._shipDragActive = true;
@@ -102425,6 +102680,11 @@ class Player {
     const screenX = screenXOverride !== undefined ? screenXOverride : viewportHalfMinus150;
     const bodyY = gameYToWorldY(this.p.y) + cameraYOffset;
     const rot = this._rotation;
+    if (this._platformer && this._platformer.enabled && this.p.isFlying) {
+      this._platformerFacingScaleX = this._platformer.getFacingScaleX(deltaSec, this._platformerFacingScaleX);
+    } else {
+      this._platformerFacingScaleX = 1;
+    }
     this._lastCameraX = cameraX;
     this._lastCameraY = cameraYOffset;
     this._aboveContainer.x = -cameraX;
@@ -102442,6 +102702,8 @@ class Player {
           layer.sprite.x = screenX + shipOx;
           layer.sprite.y = bodyY + shipOy;
           layer.sprite.rotation = rot;
+          const baseScaleY = Math.abs(layer.sprite.scaleY) || 1;
+          layer.sprite.setScale(baseScaleY * this._platformerFacingScaleX, baseScaleY);
         }
       }
       for (const layer of this._playerLayers) {
@@ -102449,14 +102711,21 @@ class Player {
           layer.sprite.x = screenX + cubeOx;
           layer.sprite.y = bodyY + cubeOy;
           layer.sprite.rotation = rot;
+          const baseScaleY = Math.abs(layer.sprite.scaleY) || 1;
+          layer.sprite.setScale(baseScaleY * this._platformerFacingScaleX, baseScaleY);
         }
       }
     } else {
+      const squish = this._getJumpSquishScale(deltaSec);
+      const squishFacing = this._platformer ? this._platformer.getSquishScaleForRotation(rot, squish.x, squish.y) : squish;
       for (const layer of this._allLayers) {
         if (layer) {
           layer.sprite.x = screenX;
           layer.sprite.y = bodyY;
           layer.sprite.rotation = rot;
+          if (this._playerLayers.includes(layer)) {
+            layer.sprite.setScale(squishFacing.x, squishFacing.y);
+          }
         }
       }
     }
@@ -102902,12 +103171,15 @@ class Player {
       return 1;
     }
   }
-  runRotateAction() {
+  runRotateAction(directionMul = 1) {
+    if (directionMul === 0) {
+      return;
+    }
     this.rotateActionActive = true;
     this.rotateActionTime = 0;
     this.rotateActionDuration = 0.39 / inputSmoothingMul;
     this.rotateActionStart = this._rotation;
-    this.rotateActionTotal = Math.PI * this.flipMod();
+    this.rotateActionTotal = Math.PI * this.flipMod() * directionMul;
   }
   stopRotation() {
     this.rotateActionActive = false;
@@ -102964,12 +103236,18 @@ class Player {
     if (this.p.isFlying) {
       this._updateFlyJump(deltaSec);
     } else if (this.p.upKeyDown && this.p.canJump) {
+      const jumpDir = this._platformer ? this._platformer.getRotateDirection() : 1;
       this.p.isJumping = true;
       this.p.onGround = false;
       this.p.canJump = false;
       this.p.upKeyPressed = false;
       this.p.yVelocity = this.flipMod() * 22.360064;
-      this.runRotateAction();
+      if (!this._platformer || this._platformer.shouldRotateOnJump()) {
+        this.runRotateAction(jumpDir);
+      }
+      if (this._platformer && this._platformer.shouldTriggerJumpSquish()) {
+        this._jumpSquishTime = this._jumpSquishDuration;
+      }
     } else if (this.p.isJumping) {
       this.p.yVelocity -= gravityMul * deltaSec * this.flipMod();
       if (this.playerIsFalling()) {
@@ -102987,7 +103265,10 @@ class Player {
         this.p.yVelocity = Math.max(this.p.yVelocity, -30);
       }
       if (this._isFallingPastThreshold() && !this.rotateActionActive) {
-        this.runRotateAction();
+        const airDir = this._platformer ? this._platformer.getRotateDirection() : 1;
+        if (!this._platformer || airDir !== 0) {
+          this.runRotateAction(airDir);
+        }
       }
       if (this.playerIsFalling()) {
         const fastFall = this.p.gravityFlipped ? this.p.yVelocity > 4 : this.p.yVelocity < -4;
@@ -103023,9 +103304,24 @@ class Player {
       }
     }
   }
+  _getJumpSquishScale(deltaSec) {
+    if (this._jumpSquishTime <= 0) {
+      return {
+        x: 1,
+        y: 1
+      };
+    }
+    this._jumpSquishTime = Math.max(0, this._jumpSquishTime - deltaSec);
+    const t = this._jumpSquishTime / this._jumpSquishDuration;
+    const ease = 1 - (1 - t) * (1 - t);
+    return {
+      x: 1 - 0.1 * ease,
+      y: 1 + 0.1 * ease
+    };
+  }
   checkCollisions(cameraX) {
     const halfW = 30;
-    const playerX = cameraX + viewportHalfMinus150;
+    let playerX = cameraX + viewportHalfMinus150;
     const py = this.p.y;
     const lastY = this.p.lastY;
     const hitInset = this.p.isFlying ? 12 : 20;
@@ -103054,11 +103350,20 @@ class Player {
               const crushPad = 9;
               const crushZone = playerX + crushPad > left && playerX - crushPad < right && py + crushPad > top && py - crushPad < bottom;
               const onTop = (this.p.yVelocity <= 0 || this.p.onGround) && (feetPrev >= bottom || feetLast >= bottom);
-              if (crushZone && !onTop) {
+              if (crushZone && !onTop && !this.p.platformerMode) {
                 this.killPlayer();
                 return;
               }
-              if (playerX + 30 - 5 > left && playerX - 30 + 5 < right) {
+              const horizontalOverlap = this._platformer && this._platformer.enabled ? playerX + halfW > left && playerX - halfW < right : playerX + 30 - 5 > left && playerX - 30 + 5 < right;
+              if (horizontalOverlap) {
+                if (this._platformer && this._platformer.enabled && !onTop) { // make sure that onTop is excluded as you'll have the issue upon walking onto EVERY BLOCK instead of when moving vertically through blocks in platformer.. not fun
+                  const clampedX = this._platformer.resolveSolidSideCollision(this.p.lastX, playerX, left, right, halfW);
+                  if (clampedX !== null) {
+                    this._scene._playerWorldX = clampedX;
+                    playerX = clampedX;
+                    continue;
+                  }
+                }
                 if ((feetPrev >= bottom || feetLast >= bottom) && (this.p.yVelocity <= 0 || this.p.onGround)) {
                   this.p.y = bottom + halfW;
                   this.hitGround();
@@ -103074,6 +103379,13 @@ class Player {
                   this.hitGround();
                   this.p.onCeiling = true;
                   this.p.collideTop = top;
+                  continue;
+                }
+                if ((headPrev <= top || headLast <= top) && this.p.yVelocity > 0 && !this.p.isFlying && this._platformer && this._platformer.shouldBonkUnderSolid()) {
+                  this.p.y = top - halfW;
+                  this.p.yVelocity = 0;
+                  this.p.isJumping = false;
+                  this.p.onGround = false;
                   continue;
                 }
               }
@@ -103245,6 +103557,8 @@ class Player {
     this._endAnimating = false;
     this._lastLandObject = null;
     this._lastXOffset = 0;
+    this._jumpSquishTime = 0;
+    this._platformerFacingScaleX = 1;
     this.stopRotation();
     this.rotateActionTime = 0;
     this._rotation = 0;

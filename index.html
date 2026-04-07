@@ -7,7 +7,6 @@
         <title>Geometry Dash: Try Me!</title>
 
         <style>
-
             @font-face {font-family: "Aller"; src: url("assets/fonts/allersubset.woff2")}
             * {margin: 0; padding: 0}
             body {
@@ -20,7 +19,7 @@
 
             /*//////////////////////////////////////////////////////////////////////*/
 
-            .dropoverlay {
+            .dropoverlay, .dropoverlay.clickable {
                 position: fixed;
                 left: 50%; top: 50%; transform: translate(-50%, -50%);
                 text-align: center; font-family: "Aller"; font-size: 2em;
@@ -33,33 +32,127 @@
                 height: calc(100% - 1em); max-height: 100vh;
                 display: flex; align-items: center;
                 justify-content: center;
+                user-select: none;
             }
             .dropoverlay.dropactive {opacity: 1; pointer-events: auto}
+            .dropoverlay.clickable {cursor: pointer}
 
+            /*//////////////////////////////////////////////////////////////////////*/
+
+            .dropselectedge {
+                position: fixed; z-index: 99998;
+                pointer-events: none;
+            }
+            .dropselectedge.active {
+                pointer-events: auto;
+                background: rgba(0,0,0,0.1);
+            }
+            .dropselectedge.top, .dropselectedge.bottom,
+            .dropselectedge.left, .dropselectedge.right {
+                background: rgba(0,0,0,0.01);
+                transition: background 0.15s;
+            }
+            .dropselectedge.top, .dropselectedge.bottom {
+                left: 0; width: 100vw; height: 8vw; min-height: 32px; max-height: 54px;
+            }
+            .dropselectedge.top {top: 0}
+            .dropselectedge.bottom {bottom: 0}
+            .dropselectedge.left, .dropselectedge.right {
+                top: 0; height: 100vh; width: 8vw; 
+                min-width: 32px; max-width: 54px;
+            }
+            .dropselectedge.left {left: 0}
+            .dropselectedge.right {right: 0}
+            .dropselectgesture {
+                position: fixed; left: 0; bottom: 0;
+                width: 20px; height: 20px; z-index: 99996;
+                pointer-events: auto; touch-action: none;
+                background: transparent;
+            }
+            .dropselectgesture svg {
+                display: block; color: black;
+                width: 100%; height: 100%;
+                pointer-events: none;
+            }
         </style>
     </head>
     <body>
         <div class="dropoverlay" aria-hidden="true">
             <span>Drop here! (<a style="color:#40E348">.gmd</a>/<a style="color:#FF96FF">.mp3</a>)</span>
+            <input type="file" class="fileinputnative" style="display:none" accept=".gmd,.mp3" multiple />
+        </div>
+        <div class="dropselectedge top"></div>
+        <div class="dropselectedge bottom"></div>
+        <div class="dropselectedge left"></div>
+        <div class="dropselectedge right"></div>
+        <div class="dropselectgesture">
+            <svg viewBox="0 0 40 40">
+                <polygon points="0,40 0,0 40,40" fill="rgba(255,255,255,0.5)" />
+            </svg>
         </div>
         <script src="dist.js"></script>
         <script>
-
             (function () {
+
                 const overlay = document.querySelector(".dropoverlay");
-                let dragdepth = 0;
+                const edges = {
+                    top: document.querySelector('.dropselectedge.top'),
+                    bottom: document.querySelector('.dropselectedge.bottom'),
+                    left: document.querySelector('.dropselectedge.left'),
+                    right: document.querySelector('.dropselectedge.right'),
+                };
+                const gesture = document.querySelector('.dropselectgesture');
+                const fileinput = document.querySelector('.fileinputnative');
+                let dragdepth = 0; let menumode = null;
+                let gestureactive = false, gesturestart = null;
+                let ignorecanvasinput = false;
 
                 function hasdrag(dt) {
                     return dt && dt.types && (dt.types.contains ? dt.types.contains("Files") : Array.prototype.indexOf.call(dt.types, "Files") >= 0);
                 }
-                function showoverlay() {
-                    overlay.classList.add("dropactive");
+                function showoverlayinteractively() {
+                    menumode = "select";
+                    overlay.classList.add("dropactive", "clickable");
                     overlay.setAttribute("aria-hidden", "false");
+                    edges.top.classList.add("active");
+                    edges.bottom.classList.add("active");
+                    edges.left.classList.add("active");
+                    edges.right.classList.add("active");
+                    ignorecanvasinput = true;
+                }
+                function showoverlaydrag() {
+                    menumode = "drag";
+                    overlay.classList.add("dropactive");
+                    overlay.classList.remove("clickable");
+                    overlay.setAttribute("aria-hidden", "false");
+                    edges.top.classList.remove("active");
+                    edges.bottom.classList.remove("active");
+                    edges.left.classList.remove("active");
+                    edges.right.classList.remove("active");
+                    ignorecanvasinput = true;
                 }
                 function hideoverlay() {
-                    overlay.classList.remove("dropactive");
+                    menumode = null;
+                    overlay.classList.remove("dropactive", "clickable");
                     overlay.setAttribute("aria-hidden", "true");
+                    edges.top.classList.remove("active");
+                    edges.bottom.classList.remove("active");
+                    edges.left.classList.remove("active");
+                    edges.right.classList.remove("active");
+                    ignorecanvasinput = false;
                 }
+                function suppresscanvasinputsandoverlay(e) {
+                    if (ignorecanvasinput && e.target.tagName === "CANVAS") {
+                        e.stopPropagation();
+                        e.preventDefault();
+                    }
+                }
+                window.addEventListener("pointerdown", suppresscanvasinputsandoverlay, true);
+                window.addEventListener("pointerup", suppresscanvasinputsandoverlay, true);
+                window.addEventListener("touchstart", suppresscanvasinputsandoverlay, true);
+                window.addEventListener("touchend", suppresscanvasinputsandoverlay, true);
+                window.addEventListener("mousedown", suppresscanvasinputsandoverlay, true);
+                window.addEventListener("mouseup", suppresscanvasinputsandoverlay, true);
 
                 /*//////////////////////////////////////////////////////////////////////*/
 
@@ -69,23 +162,20 @@
                     if (m) {
                         return m[1].replace(/\s+/g, "");
                     }
-                    // surely all valid gzip b64 level data starts with this, right?
                     if (t.indexOf("H4sI") === 0) {
                         return t.replace(/\s+/g, "");
                     }
                     return null;
                 }
-                function queuePendingMp3(file) {
+                function queuependingmp3(file) {
                     if (window.__custommusic) {URL.revokeObjectURL(window.__custommusic)}
                     window.__custommusic = URL.createObjectURL(file);
                 }
 
                 window.addEventListener("dragenter", function (e) {
-                    if (!hasdrag(e.dataTransfer)) {
-                        return;
-                    }
+                    if (!hasdrag(e.dataTransfer)) { return; }
                     dragdepth++;
-                    showoverlay();
+                    showoverlaydrag();
                 });
                 window.addEventListener("dragleave", function (e) {
                     if (!hasdrag(e.dataTransfer)) {return}
@@ -99,27 +189,89 @@
                     }
                 });
                 window.addEventListener("drop", function (e) {
+                    if (menumode !== "drag") return;
                     e.preventDefault();
                     dragdepth = 0; hideoverlay();
                     const files = e.dataTransfer && e.dataTransfer.files;
-                    if (! files || ! files.length) {
-                        return;
-                    }
-                    for (let i = 0; i < files.length; i++) {
-                        const file = files[i];
+                    if (!files || !files.length) { return; }
+                    handlefilelist(files);
+                });
+
+                function handlefilelist(filelist) {
+                    for (let i = 0; i < filelist.length; i++) {
+                        const file = filelist[i];
                         const name = (file.name || "").toLowerCase();
                         if (name.endsWith(".gmd")) {
                             const reader = new FileReader();
                             reader.onload = function () {
                                 const b64 = lvldataextract(String(reader.result || ""));
-                                if (b64) {window.__customlevel = b64} else {}
+                                if (b64) {window.__customlevel = b64}
                             };
                             reader.readAsText(file);
                         } else if (name.endsWith(".mp3")) {
-                            queuePendingMp3(file);
+                            queuependingmp3(file);
+                        }
+                    }
+                }
+
+                overlay.addEventListener("click", function (e) {
+                    if (menumode === "select") {
+                        if (e.target.closest('.dropoverlay')) {
+                            fileinput.value = "";
+                            fileinput.click();
                         }
                     }
                 });
+                fileinput.addEventListener("change", function () {
+                    if (menumode === "select" && fileinput.files && fileinput.files.length > 0) {
+                        handlefilelist(fileinput.files);
+                        hideoverlay();
+                    }
+                });
+
+                for (let key in edges) {
+                    edges[key].addEventListener('click', function () {
+                        if (menumode === "select") hideoverlay();
+                    });
+                    edges[key].addEventListener('touchstart', function () {
+                        if (menumode === "select") hideoverlay();
+                    }, {passive:true});
+                }
+
+                function iswithin(start, x, y, tol=22) {
+                    return  Math.abs(start.x - x) <= tol && Math.abs(start.y - y) <= tol;
+                }
+                gesture.addEventListener('pointerdown', function(e) {
+                    if (menumode) return;
+                    gestureactive = true;
+                    let rect = gesture.getBoundingClientRect();
+                    gesturestart = {x: rect.left + rect.width/2, y: rect.top + rect.height/2};
+                    gesturestart.pointer = {x: e.clientX, y: e.clientY};
+                });
+                window.addEventListener('pointermove', function(e) {
+                    if (!gestureactive || menumode) return;
+                    let dx = e.clientX - gesturestart.pointer.x;
+                    let dy = e.clientY - gesturestart.pointer.y;
+                    let diag = Math.sqrt(window.innerWidth ** 2 + window.innerHeight ** 2);
+                    if (dx > 0.18*diag && dy < -0.18*diag) {
+                        gestureactive = false;
+                        showoverlayinteractively();
+                    }
+                });
+                window.addEventListener('pointerup', function(e) {
+                    if (!gestureactive || menumode) return;
+                    let x = e.clientX, y = e.clientY;
+                    let rect = gesture.getBoundingClientRect();
+                    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+                        showoverlayinteractively();
+                    }
+                    gestureactive = false;
+                });
+                window.addEventListener("resize", function(){
+                    gestureactive = false;
+                    gesturestart = null;
+                });
+
             })();
 
             /*//////////////////////////////////////////////////////////////////////*/
@@ -127,7 +279,7 @@
             new ResizeObserver(() => {
                 window.dispatchEvent(new Event("resize"));
             }).observe(document.documentElement);
-
+            
         </script>
     </body>
 </html>

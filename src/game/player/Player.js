@@ -1,8 +1,9 @@
 class Player {
-  constructor(scene, physicsState, gameLayer) {
+  constructor(scene, physicsState, gameLayer, platformer = null) {
     this._scene = scene;
     this.p = physicsState;
     this._gameLayer = gameLayer;
+    this._platformer = platformer;
     this._rotation = 0;
     this.rotateActionActive = false;
     this.rotateActionTime = 0;
@@ -14,6 +15,9 @@ class Player {
     this._lastXOffset = 0;
     this._lastCameraX = 0;
     this._lastCameraY = 0;
+    this._jumpSquishTime = 0;
+    this._jumpSquishDuration = 0.5;
+    this._platformerFacingScaleX = 1;
     this._createSprites();
     this._initParticles(scene);
     scene.events.on("shutdown", () => this._cleanupExplosion());
@@ -303,7 +307,7 @@ class Player {
     const bodyWorldY = gameYToWorldY(this.p.y);
     this._particleEmitter.particleX = playerWorldX - 20;
     this._particleEmitter.particleY = bodyWorldY + 26;
-    const runParticlesOn = this.p.onGround && !this.p.isFlying;
+    const runParticlesOn = this._platformer ? this._platformer.shouldUseGroundParticles(this.p.onGround) && !this.p.isFlying : this.p.onGround && !this.p.isFlying;
     if (runParticlesOn && !this._particleActive) {
       this._particleEmitter.start();
       this._particleActive = true;
@@ -344,7 +348,7 @@ class Player {
     }
     this._shipDragEmitter.x = viewportHalfMinus150;
     this._shipDragEmitter.particleY = gameYToWorldY(this.p.y) + cameraYOffset + 30;
-    const shipGroundDrag = this.p.isFlying && this.p.onGround && !this.p.onCeiling;
+    const shipGroundDrag = this.p.isFlying && (this._platformer ? this._platformer.shouldUseShipGroundDrag(this.p.onGround, this.p.onCeiling) : this.p.onGround && !this.p.onCeiling);
     if (shipGroundDrag && !this._shipDragActive) {
       this._shipDragEmitter.start();
       this._shipDragActive = true;
@@ -384,6 +388,11 @@ class Player {
     const screenX = screenXOverride !== undefined ? screenXOverride : viewportHalfMinus150;
     const bodyY = gameYToWorldY(this.p.y) + cameraYOffset;
     const rot = this._rotation;
+    if (this._platformer && this._platformer.enabled && this.p.isFlying) {
+      this._platformerFacingScaleX = this._platformer.getFacingScaleX(deltaSec, this._platformerFacingScaleX);
+    } else {
+      this._platformerFacingScaleX = 1;
+    }
     this._lastCameraX = cameraX;
     this._lastCameraY = cameraYOffset;
     this._aboveContainer.x = -cameraX;
@@ -401,6 +410,8 @@ class Player {
           layer.sprite.x = screenX + shipOx;
           layer.sprite.y = bodyY + shipOy;
           layer.sprite.rotation = rot;
+          const baseScaleY = Math.abs(layer.sprite.scaleY) || 1;
+          layer.sprite.setScale(baseScaleY * this._platformerFacingScaleX, baseScaleY);
         }
       }
       for (const layer of this._playerLayers) {
@@ -408,14 +419,21 @@ class Player {
           layer.sprite.x = screenX + cubeOx;
           layer.sprite.y = bodyY + cubeOy;
           layer.sprite.rotation = rot;
+          const baseScaleY = Math.abs(layer.sprite.scaleY) || 1;
+          layer.sprite.setScale(baseScaleY * this._platformerFacingScaleX, baseScaleY);
         }
       }
     } else {
+      const squish = this._getJumpSquishScale(deltaSec);
+      const squishFacing = this._platformer ? this._platformer.getSquishScaleForRotation(rot, squish.x, squish.y) : squish;
       for (const layer of this._allLayers) {
         if (layer) {
           layer.sprite.x = screenX;
           layer.sprite.y = bodyY;
           layer.sprite.rotation = rot;
+          if (this._playerLayers.includes(layer)) {
+            layer.sprite.setScale(squishFacing.x, squishFacing.y);
+          }
         }
       }
     }
@@ -861,12 +879,15 @@ class Player {
       return 1;
     }
   }
-  runRotateAction() {
+  runRotateAction(directionMul = 1) {
+    if (directionMul === 0) {
+      return;
+    }
     this.rotateActionActive = true;
     this.rotateActionTime = 0;
     this.rotateActionDuration = 0.39 / inputSmoothingMul;
     this.rotateActionStart = this._rotation;
-    this.rotateActionTotal = Math.PI * this.flipMod();
+    this.rotateActionTotal = Math.PI * this.flipMod() * directionMul;
   }
   stopRotation() {
     this.rotateActionActive = false;
@@ -923,12 +944,18 @@ class Player {
     if (this.p.isFlying) {
       this._updateFlyJump(deltaSec);
     } else if (this.p.upKeyDown && this.p.canJump) {
+      const jumpDir = this._platformer ? this._platformer.getRotateDirection() : 1;
       this.p.isJumping = true;
       this.p.onGround = false;
       this.p.canJump = false;
       this.p.upKeyPressed = false;
       this.p.yVelocity = this.flipMod() * 22.360064;
-      this.runRotateAction();
+      if (!this._platformer || this._platformer.shouldRotateOnJump()) {
+        this.runRotateAction(jumpDir);
+      }
+      if (this._platformer && this._platformer.shouldTriggerJumpSquish()) {
+        this._jumpSquishTime = this._jumpSquishDuration;
+      }
     } else if (this.p.isJumping) {
       this.p.yVelocity -= gravityMul * deltaSec * this.flipMod();
       if (this.playerIsFalling()) {
@@ -946,7 +973,10 @@ class Player {
         this.p.yVelocity = Math.max(this.p.yVelocity, -30);
       }
       if (this._isFallingPastThreshold() && !this.rotateActionActive) {
-        this.runRotateAction();
+        const airDir = this._platformer ? this._platformer.getRotateDirection() : 1;
+        if (!this._platformer || airDir !== 0) {
+          this.runRotateAction(airDir);
+        }
       }
       if (this.playerIsFalling()) {
         const fastFall = this.p.gravityFlipped ? this.p.yVelocity > 4 : this.p.yVelocity < -4;
@@ -982,9 +1012,24 @@ class Player {
       }
     }
   }
+  _getJumpSquishScale(deltaSec) {
+    if (this._jumpSquishTime <= 0) {
+      return {
+        x: 1,
+        y: 1
+      };
+    }
+    this._jumpSquishTime = Math.max(0, this._jumpSquishTime - deltaSec);
+    const t = this._jumpSquishTime / this._jumpSquishDuration;
+    const ease = 1 - (1 - t) * (1 - t);
+    return {
+      x: 1 - 0.1 * ease,
+      y: 1 + 0.1 * ease
+    };
+  }
   checkCollisions(cameraX) {
     const halfW = 30;
-    const playerX = cameraX + viewportHalfMinus150;
+    let playerX = cameraX + viewportHalfMinus150;
     const py = this.p.y;
     const lastY = this.p.lastY;
     const hitInset = this.p.isFlying ? 12 : 20;
@@ -1013,11 +1058,20 @@ class Player {
               const crushPad = 9;
               const crushZone = playerX + crushPad > left && playerX - crushPad < right && py + crushPad > top && py - crushPad < bottom;
               const onTop = (this.p.yVelocity <= 0 || this.p.onGround) && (feetPrev >= bottom || feetLast >= bottom);
-              if (crushZone && !onTop) {
+              if (crushZone && !onTop && !this.p.platformerMode) {
                 this.killPlayer();
                 return;
               }
-              if (playerX + 30 - 5 > left && playerX - 30 + 5 < right) {
+              const horizontalOverlap = this._platformer && this._platformer.enabled ? playerX + halfW > left && playerX - halfW < right : playerX + 30 - 5 > left && playerX - 30 + 5 < right;
+              if (horizontalOverlap) {
+                if (this._platformer && this._platformer.enabled && !onTop) { // make sure that onTop is excluded as you'll have the issue upon walking onto EVERY BLOCK instead of when moving vertically through blocks in platformer.. not fun
+                  const clampedX = this._platformer.resolveSolidSideCollision(this.p.lastX, playerX, left, right, halfW);
+                  if (clampedX !== null) {
+                    this._scene._playerWorldX = clampedX;
+                    playerX = clampedX;
+                    continue;
+                  }
+                }
                 if ((feetPrev >= bottom || feetLast >= bottom) && (this.p.yVelocity <= 0 || this.p.onGround)) {
                   this.p.y = bottom + halfW;
                   this.hitGround();
@@ -1033,6 +1087,13 @@ class Player {
                   this.hitGround();
                   this.p.onCeiling = true;
                   this.p.collideTop = top;
+                  continue;
+                }
+                if ((headPrev <= top || headLast <= top) && this.p.yVelocity > 0 && !this.p.isFlying && this._platformer && this._platformer.shouldBonkUnderSolid()) {
+                  this.p.y = top - halfW;
+                  this.p.yVelocity = 0;
+                  this.p.isJumping = false;
+                  this.p.onGround = false;
                   continue;
                 }
               }
@@ -1204,6 +1265,8 @@ class Player {
     this._endAnimating = false;
     this._lastLandObject = null;
     this._lastXOffset = 0;
+    this._jumpSquishTime = 0;
+    this._platformerFacingScaleX = 1;
     this.stopRotation();
     this.rotateActionTime = 0;
     this._rotation = 0;
