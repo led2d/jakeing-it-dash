@@ -22,7 +22,7 @@ this is a [complete](https://github.com/sogful/gddemo/commit/b5542726113a3000e3d
   </tr>
 </table>
 
-### running
+## running
 
 - clone the repository:
    ```
@@ -41,12 +41,10 @@ this is a [complete](https://github.com/sogful/gddemo/commit/b5542726113a3000e3d
 
 ## code
 
-- `src/game` - game-specific scenes and player code
-  - `src/game/BootScene.js` & `src/game/LoadingScene.js` - asset loading and initial setup
-  - `src/game/GameScene.js` - main game logic
-  - `src/game/fun` - :trollface:
-<br>
-
 - `src/config` - easy to edit variables
 - `src/dependencies` - modules required to run the game - phaser for rendering and pako for decompressing level data. <br>
   <sup>if you wish to use uncompressed level data instead (for some reason) then you will need neither pako nor the majority of LevelParser</sup>
+- `src/game` - game-specific scenes and player code
+  - `src/game/fun` - :trollface:
+  - `src/game/BootScene.js` & `src/game/LoadingScene.js` - asset loading and initial setup
+  - `src/game/GameScene.js` - main game logic
